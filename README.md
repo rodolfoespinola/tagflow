@@ -19,7 +19,7 @@ The system combines:
 - **IPTC injection** into approved files, compatible with WordPress, ResourceSpace, and other CMS
 - **SQLite audit log** with full reviewer traceability
 
-Built for the Legislative Assembly of Santa Catarina (ALESC), Brazil. Generalizable to any media-heavy institutional environment.
+Built as a study for the Legislative Assembly of Santa Catarina (ALESC), Brazil. Generalizable to any media-heavy institutional environment.
 
 ---
 
@@ -198,7 +198,7 @@ THRESHOLD_AUTO = 0.45  # Below this → pre-approved automatically
 
 O Tagflow é um sistema open-source desenvolvido para eliminar o gargalo operacional de tagging manual de centenas de fotos por dia em ambientes institucionais — assembleias legislativas, agências de imprensa, arquivos públicos e veículos de comunicação.
 
-Desenvolvido para a Assembleia Legislativa de Santa Catarina (ALESC), Brasil. Adaptável para qualquer organização com grande volume de produção fotográfica.
+Desenvolvido como protótipo para a Assembleia Legislativa de Santa Catarina (ALESC), Brasil. Adaptável para qualquer organização com grande volume de produção fotográfica.
 
 ## Arquitetura
 
