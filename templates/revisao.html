@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Revisão de Fotos — ALESC</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        background: #f0f2f5;
+        color: #333;
+      }
+      header {
+        background: #1a3a5c;
+        color: white;
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      header h1 {
+        font-size: 18px;
+      }
+      header span {
+        font-size: 14px;
+        background: #e74c3c;
+        padding: 4px 12px;
+        border-radius: 12px;
+      }
+      .container {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 20px;
+        padding: 20px;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .foto-box {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .foto-box img {
+        width: 100%;
+        height: auto;
+        display: block;
+        max-height: 75vh;
+        object-fit: contain;
+        background: #222;
+      }
+      .foto-nome {
+        padding: 10px 16px;
+        font-size: 12px;
+        color: #666;
+        border-top: 1px solid #eee;
+      }
+      .painel {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .card {
+        background: white;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .card h3 {
+        font-size: 13px;
+        text-transform: uppercase;
+        color: #888;
+        margin-bottom: 12px;
+        letter-spacing: 0.5px;
+      }
+      .meta-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .meta-item label {
+        font-size: 11px;
+        color: #999;
+        display: block;
+      }
+      .meta-item span {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .deputado {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        border-radius: 6px;
+        margin-bottom: 6px;
+        border: 1px solid #e0e0e0;
+      }
+      .deputado.pre-aprovado {
+        background: #f0fff4;
+        border-color: #68d391;
+      }
+      .deputado.revisar {
+        background: #fffbf0;
+        border-color: #f6ad55;
+      }
+      .deputado .nome {
+        flex: 1;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .deputado .confianca {
+        font-size: 12px;
+        color: #888;
+      }
+      .deputado .status {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 10px;
+      }
+      .pre-aprovado .status {
+        background: #c6f6d5;
+        color: #276749;
+      }
+      .revisar .status {
+        background: #feebc8;
+        color: #7b341e;
+      }
+      .btn-remover {
+        background: none;
+        border: none;
+        color: #e53e3e;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .btn-remover:hover {
+        background: #fff5f5;
+      }
+      .adicionar {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .adicionar input {
+        flex: 1;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .adicionar button {
+        padding: 8px 12px;
+        background: #1a3a5c;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .sem-deputados {
+        color: #999;
+        font-size: 13px;
+        text-align: center;
+        padding: 12px;
+      }
+      .acoes {
+        display: flex;
+        gap: 10px;
+      }
+      .btn-aprovar {
+        flex: 1;
+        padding: 14px;
+        background: #276749;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-aprovar:hover {
+        background: #22543d;
+      }
+      .btn-pular {
+        padding: 14px 20px;
+        background: #718096;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      .btn-pular:hover {
+        background: #4a5568;
+      }
+      .revisor-input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .vazio {
+        text-align: center;
+        padding: 60px 20px;
+        color: #888;
+      }
+      .vazio h2 {
+        font-size: 24px;
+        margin-bottom: 8px;
+      }
+      #mensagem {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        display: none;
+        z-index: 100;
+      }
+      .msg-ok {
+        background: #276749;
+      }
+      .msg-erro {
+        background: #e53e3e;
+      }
+      datalist option {
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>📷 Revisão de Fotos — Agência ALESC</h1>
+      <span id="contador">{{ pendentes }} pendentes</span>
+    </header>
+
+    <div id="mensagem"></div>
+
+    {% if foto %}
+    <div class="container">
+      <div class="foto-box">
+        <img
+          id="img-foto"
+          src="/foto/{{ foto.arquivo }}"
+          alt="Foto para revisão"
+        />
+        <div class="foto-nome">{{ foto.arquivo.split('/')[-1] }}</div>
+      </div>
+
+      <div class="painel">
+        <!-- Metadados -->
+        <div class="card">
+          <h3>Metadados</h3>
+          <div class="meta-grid">
+            <div class="meta-item">
+              <label>Data</label>
+              <span>{{ foto.metadados.data or '—' }}</span>
+            </div>
+            <div class="meta-item">
+              <label>Local</label>
+              <span>{{ foto.metadados.local or '—' }}</span>
+            </div>
+            <div class="meta-item">
+              <label>Evento</label>
+              <span
+                >{{ foto.metadados.comissao or foto.metadados.evento or '—'
+                }}</span
+              >
+            </div>
+            <div class="meta-item">
+              <label>Fotógrafo</label>
+              <span>{{ foto.metadados.fotografo or '—' }}</span>
+            </div>
+            {% if foto.metadados.municipio %}
+            <div class="meta-item">
+              <label>Município</label>
+              <span>{{ foto.metadados.municipio }}</span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Deputados -->
+        <div class="card">
+          <h3>Deputados identificados</h3>
+          <div id="lista-deputados">
+            {% if foto.deputados_sugeridos %} {% for nome, info in
+            foto.deputados_sugeridos.items() %}
+            <div
+              class="deputado {{ 'pre-aprovado' if info.status == 'pre_aprovado' else 'revisar' }}"
+              data-nome="{{ nome }}"
+            >
+              <div class="nome">{{ nome }}</div>
+              <div class="confianca">{{ info.confianca }}%</div>
+              <div class="status">
+                {{ '✓ aprovado' if info.status == 'pre_aprovado' else '?
+                revisar' }}
+              </div>
+              <button
+                class="btn-remover"
+                onclick="removerDeputado(this, '{{ nome }}')"
+              >
+                ✕
+              </button>
+            </div>
+            {% endfor %} {% else %}
+            <div class="sem-deputados">Nenhum deputado identificado</div>
+            {% endif %}
+          </div>
+
+          <div class="adicionar">
+            <input
+              type="text"
+              id="input-deputado"
+              list="lista-todos"
+              placeholder="Adicionar deputado..."
+            />
+            <datalist id="lista-todos">
+              {% for dep in todos_deputados %}
+              <option value="{{ dep }}">{% endfor %}</option>
+            </datalist>
+            <button onclick="adicionarDeputado()">+</button>
+          </div>
+        </div>
+
+        <!-- Revisor -->
+        <div class="card">
+          <h3>Revisor</h3>
+          <input
+            type="text"
+            id="revisor"
+            class="revisor-input"
+            placeholder="Seu nome..."
+            value="{{ revisor_padrao }}"
+          />
+        </div>
+
+        <!-- Ações -->
+        <div class="acoes">
+          <button class="btn-pular" onclick="pular()">Pular →</button>
+          <button class="btn-aprovar" onclick="aprovar()">
+            ✓ Aprovar e injetar IPTC
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="vazio">
+      <h2>✅ Fila vazia</h2>
+      <p>Todas as fotos foram revisadas.</p>
+    </div>
+    {% endif %}
+
+    <script>
+      const jsonAtual = "{{ foto.json_path if foto else '' }}";
+      const deputados = {};
+
+      {% if foto %}
+      {% for nome, info in foto.deputados_sugeridos.items() %}
+      deputados["{{ nome }}"] = { confianca: {{ info.confianca }}, status: "{{ info.status }}" };
+      {% endfor %}
+      {% endif %}
+
+      function removerDeputado(btn, nome) {
+          delete deputados[nome];
+          btn.closest('.deputado').remove();
+          if (Object.keys(deputados).length === 0) {
+              document.getElementById('lista-deputados').innerHTML =
+                  '<div class="sem-deputados">Nenhum deputado identificado</div>';
+          }
+      }
+
+      function adicionarDeputado() {
+          const input = document.getElementById('input-deputado');
+          const nome = input.value.trim();
+          if (!nome || deputados[nome]) { input.value = ''; return; }
+
+          deputados[nome] = { confianca: 100, status: 'manual' };
+
+          const sem = document.querySelector('.sem-deputados');
+          if (sem) sem.remove();
+
+          const div = document.createElement('div');
+          div.className = 'deputado pre-aprovado';
+          div.dataset.nome = nome;
+          div.innerHTML = `
+              <div class="nome">${nome}</div>
+              <div class="confianca">manual</div>
+              <div class="status">✓ manual</div>
+              <button class="btn-remover" onclick="removerDeputado(this, '${nome}')">✕</button>`;
+          document.getElementById('lista-deputados').appendChild(div);
+          input.value = '';
+      }
+
+      function mostrarMensagem(texto, tipo) {
+          const el = document.getElementById('mensagem');
+          el.textContent = texto;
+          el.className = tipo === 'ok' ? 'msg-ok' : 'msg-erro';
+          el.style.display = 'block';
+          setTimeout(() => { el.style.display = 'none'; }, 3000);
+      }
+
+      async function aprovar() {
+          const revisor = document.getElementById('revisor').value.trim();
+          if (!revisor) { alert('Informe o nome do revisor.'); return; }
+
+          const resp = await fetch('/aprovar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  json_path: jsonAtual,
+                  deputados_aprovados: Object.keys(deputados),
+                  revisor: revisor
+              })
+          });
+
+          const data = await resp.json();
+          if (data.ok) {
+              mostrarMensagem('✓ Aprovado e IPTC injetado!', 'ok');
+              setTimeout(() => location.reload(), 1200);
+          } else {
+              mostrarMensagem('Erro: ' + data.erro, 'erro');
+          }
+      }
+
+      async function pular() {
+          const resp = await fetch('/pular', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ json_path: jsonAtual })
+          });
+          location.reload();
+      }
+
+      document.getElementById('input-deputado')?.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') adicionarDeputado();
+      });
+    </script>
+  </body>
+</html>

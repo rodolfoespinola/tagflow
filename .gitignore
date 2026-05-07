@@ -1,0 +1,31 @@
+# Ambiente virtual
+venv-alesc-fotos/
+venv/
+.env
+
+# Modelos DeepFace (baixados automaticamente)
+~/.deepface/
+
+# Fotos e dados reais (nunca versionar)
+fotos/
+referencias/deputados/
+storage/json/
+storage/logs/
+storage/embeddings/
+
+# Arquivos temporários
+/tmp/alesc_temp_foto.jpg
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDEs
+.vscode/
+.idea/
+*.code-workspace
