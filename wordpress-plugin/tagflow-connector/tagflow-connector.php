@@ -2,9 +2,21 @@
 /**
  * Plugin Name: ALESC Media Connector
  * Description: Preenche automaticamente campos de mídia a partir do nome do arquivo
- * Version: 1.6
+ * Version: 1.8
  * Author: Agência ALESC
  * Requires PHP: 7.2
+ *
+ * Convenção de nomenclatura esperada (Manual ISO 8601 da Agência ALESC):
+ * AAAA-MM-DD_TIPO_[SUBTIPO]_[DESC]_[MUN-CIDADE]_FOTOGRAFO-SEQ.jpg
+ *
+ * Exemplos:
+ * 2026-05-08_S-ORDINARIA_BC-001.jpg
+ * 2026-05-08_COMISSAO_CCJ_REFORMA-TRIBUTARIA_MUN-CHAPECO_BC-001.jpg
+ * 2026-05-08_AUDIENCIA_SAUDE-PUBLICA_MUN-JOINVILLE_RC-003.jpg
+ *
+ * Segurança multisetorial:
+ * O plugin ignora arquivos que não seguem o padrão AAAA-MM-DD_ no início
+ * do nome. Uploads de outros setores da ALESC não são afetados.
  */
 
 if (!defined('ABSPATH')) {
@@ -154,6 +166,14 @@ function alesc_formatar_texto($str) {
     return alesc_ucwords(alesc_strtolower(str_replace('-', ' ', $str)));
 }
 
+// ─── VERIFICAÇÃO DE PADRÃO ISO 8601 ──────────────────────────────────────────
+// Primeira barreira de segurança multisetorial
+// Arquivos de outros setores raramente seguem AAAA-MM-DD_ no início do nome
+
+function alesc_segue_padrao_nomenclatura($filename) {
+    return (bool) preg_match('/^\d{4}-\d{2}-\d{2}_/', $filename);
+}
+
 // ─── PARSER DO NOME DO ARQUIVO ────────────────────────────────────────────────
 function alesc_parsear_filename($filename) {
     $nome   = strtoupper(pathinfo($filename, PATHINFO_FILENAME));
@@ -250,32 +270,43 @@ function alesc_parsear_filename($filename) {
 // ─── HOOK PRINCIPAL ───────────────────────────────────────────────────────────
 function alesc_processar_upload($metadata, $attachment_id) {
 
-    // Verifica MIME type — mais robusto que wp_attachment_is_image() isolado
+    // Verifica se o attachment existe e é do tipo correto
+    $post = get_post($attachment_id);
+    if (!$post || $post->post_type !== 'attachment') {
+        return $metadata;
+    }
+
+    // Verifica MIME type
     $mime = get_post_mime_type($attachment_id);
     if (!$mime || strpos($mime, 'image/') !== 0) {
         return $metadata;
     }
 
-    // Verifica caminho do arquivo antes de qualquer operação
+    // Verifica caminho do arquivo
     $arquivo = get_attached_file($attachment_id);
     if (!$arquivo) {
         error_log('ALESC Media Connector: arquivo não encontrado — attachment_id ' . $attachment_id);
         return $metadata;
     }
 
-    // Trava anti-reprocessamento
-    // Evita sobrescrever campos editados manualmente e reprocessamento
-    // por plugins de regeneração de thumbnails (ex: Regenerate Thumbnails)
-    if (get_post_meta($attachment_id, '_alesc_processado', true)) {
+    $filename = basename($arquivo);
+
+    // Barreira multisetorial — ignora arquivos que não seguem o padrão
+    // AAAA-MM-DD_ da Agência ALESC. Uploads de outros setores não são afetados.
+    if (!alesc_segue_padrao_nomenclatura($filename)) {
         return $metadata;
     }
 
-    $filename = basename($arquivo);
-    $meta     = alesc_parsear_filename($filename);
+    // Trava anti-reprocessamento com comparação estrita de string
+    if (get_post_meta($attachment_id, '_alesc_processado', true) === '1') {
+        return $metadata;
+    }
 
-    // Arquivo fora do padrão — ignora sem poluir o banco
+    $meta = alesc_parsear_filename($filename);
+
+    // Tipo de evento não reconhecido — ignora sem poluir o banco
     if (empty($meta['tipo_nome'])) {
-        error_log('ALESC Media Connector: nomenclatura não reconhecida — ' . $filename);
+        error_log('ALESC Media Connector: tipo de evento não reconhecido — ' . $filename);
         return $metadata;
     }
 
@@ -286,9 +317,10 @@ function alesc_processar_upload($metadata, $attachment_id) {
         $meta['tipo_nome'],
         $meta['comissao'],
         $meta['descricao'],
-        $meta['data'] ? '— ' . $meta['data'] : null,
+        $meta['municipio'] ? 'em ' . $meta['municipio'] : null,
+        $meta['data'],
     ));
-    $titulo = implode(' ', $partes_titulo);
+    $titulo = implode(' — ', $partes_titulo);
 
     // ── Legenda ───────────────────────────────────────────────────────────────
     $legenda = !empty($meta['fotografo'])
@@ -328,7 +360,7 @@ function alesc_processar_upload($metadata, $attachment_id) {
     // ── Campos customizados ───────────────────────────────────────────────────
     // Adaptar os meta_keys conforme os campos do WordPress da ALESC
 
-    // Rastreabilidade — salvo sempre, meta_key fixo
+    // Rastreabilidade — salvo sempre para arquivos que seguem o padrão
     update_post_meta(
         $attachment_id,
         'alesc_filename_original',
@@ -379,9 +411,8 @@ function alesc_processar_upload($metadata, $attachment_id) {
     }
 
     // Marca como processado apenas se wp_update_post foi bem-sucedido
-    // Evita attachment marcado como processado com metadados incompletos
     if ($update_ok) {
-        update_post_meta($attachment_id, '_alesc_processado', 1);
+        update_post_meta($attachment_id, '_alesc_processado', '1');
         error_log('ALESC Media Connector: concluído — attachment_id ' . $attachment_id);
     } else {
         error_log('ALESC Media Connector: processamento parcial — attachment_id ' . $attachment_id);
