@@ -10,14 +10,7 @@
 
 Tagflow is an open-source system built to eliminate the operational bottleneck of manually tagging hundreds of photos per day in institutional settings — legislative assemblies, press agencies, public archives, and media organizations.
 
-The system combines:
-
-- **WordPress plugin** that extracts metadata from filenames at upload time — no workflow changes
-- **Facial recognition** of known individuals via ArcFace + RetinaFace, running asynchronously
-- **Human review web interface** for validating AI suggestions without blocking publication
-- **Automatic field population** — title, caption, alt text, description, photographer, event type, commission, municipality
-- **SQLite audit log** with full reviewer traceability
-- **LGPD/GDPR compliant** — all biometric processing runs locally, no data sent externally
+The system was designed around one core principle: **photo publication cannot wait for metadata processing**. Photos go live immediately after upload. Metadata enrichment happens in the background, without editorial pressure.
 
 Built for the Legislative Assembly of Santa Catarina (ALESC), Brazil. Generalizable to any media-heavy institutional environment.
 
@@ -25,46 +18,56 @@ Built for the Legislative Assembly of Santa Catarina (ALESC), Brazil. Generaliza
 
 ## Architecture
 
-The system is split into two independent layers:
+Tagflow operates in two independent layers:
 
-**Layer 1 — Instant, no AI (WordPress plugin)**
+### Layer 1 — Instant metadata (WordPress plugin)
 
-```
-Photographer uploads photo to WordPress
-        ↓
-Plugin intercepts upload via add_attachment hook
-        ↓
-Parses filename following ISO 8601 convention:
-  2026-05-07_S-ORDINARIA_SESSAO-ORDINARIA_BC-001.jpg
-        ↓
-Auto-fills WordPress fields immediately:
-  Title, Caption, Alt text, Description,
-  Photographer, Event type, Commission, Municipality
-        ↓
-Writes file path to SQLite processing queue
-```
-
-**Layer 2 — Intelligent, asynchronous (Python worker)**
+No AI. No external dependencies. Runs in milliseconds at upload time.
 
 ```
-Python worker reads queue every 30 seconds
+Photographer exports photos from Lightroom
+with IPTC keywords embedded (event, commission, city)
         ↓
-RetinaFace detects faces in image
+Editor uploads to WordPress (same workflow as today)
         ↓
-ArcFace compares against reference database
+Plugin intercepts upload via wp_generate_attachment_metadata hook
         ↓
-JSON saved to review queue
+Checks filename against ISO 8601 convention:
+  YYYY-MM-DD_EVENT-TYPE_[SUBTYPE]_[DESC]_[MUN-CITY]_PHO-SEQ.jpg
+        ↓
+Files from other departments ignored automatically
+        ↓
+Parses filename → extracts date, event type, commission,
+  municipality, photographer
+        ↓
+Auto-fills WordPress fields:
+  Title, Caption, Alt text, Photographer,
+  Event type, Commission, Municipality, Year
+        ↓
+Photo immediately searchable by event, photographer, commission
+```
+
+### Layer 2 — Facial recognition (Python worker)
+
+Runs asynchronously. Never blocks publication.
+
+```
+Python worker monitors photo folder (Montreal server)
+        ↓
+RetinaFace detects faces in each image
+        ↓
+ArcFace compares against reference database of deputies
+        ↓
+Results saved to review queue (JSON + SQLite)
         ↓
 Reviewer opens Flask interface when available
         ↓
 Confirms identities, corrects errors, approves
         ↓
-WordPress REST API updated with deputies and parties
+WordPress updated with deputy names and party affiliations
         ↓
-Photo becomes searchable by person and party
+Photo becomes searchable by person and political party
 ```
-
-This design ensures **photos go live immediately** while metadata enrichment happens in the background without editorial pressure.
 
 ---
 
@@ -72,129 +75,191 @@ This design ensures **photos go live immediately** while metadata enrichment hap
 
 ```
 tagflow/
-├── monitor.py                  # Python worker — facial recognition engine
-├── app.py                      # Flask review web interface
+├── monitor.py                      # Python worker — facial recognition engine
+├── app.py                          # Flask review web interface
 ├── requirements.txt
 ├── wordpress-plugin/
 │   ├── README.md
 │   └── tagflow-connector/
-│       └── tagflow-connector.php   # WordPress plugin
+│       └── tagflow-connector.php   # WordPress plugin (v1.8)
 ├── referencias/
-│   └── deputados/              # Reference photos (not versioned)
+│   └── deputados/                  # Reference photos — not versioned
 ├── fotos/
-│   └── entrada/                # Monitored input folder (not versioned)
+│   └── entrada/                    # Monitored input folder — not versioned
 ├── storage/
-│   ├── json/                   # Review queue (not versioned)
-│   ├── embeddings/             # Biometric data (not versioned)
-│   └── logs/                   # SQLite audit log (not versioned)
+│   ├── json/                       # Review queue — not versioned
+│   ├── embeddings/                 # Biometric data — not versioned
+│   └── logs/                       # SQLite audit log — not versioned
 └── templates/
-    └── revisao.html            # Review interface template
+    └── revisao.html                # Flask review interface template
 ```
 
 ---
 
 ## Filename Convention
 
-Tagflow follows the ALESC ISO 8601 Nomenclature Manual:
+Tagflow follows the ALESC ISO 8601 Nomenclature Manual. The plugin only processes files that match this convention — files from other departments are automatically ignored.
 
 ```
-YYYY-MM-DD_EVENT-TYPE_DESCRIPTION[_CITY]_PHO-SEQ.jpg
+YYYY-MM-DD_EVENT-TYPE_[SUBTYPE]_[DESCRIPTION]_[MUN-CITY]_PHO-SEQ.jpg
 ```
 
-Examples:
+### Examples
 
 ```
-2026-05-07_S-ORDINARIA_SESSAO-ORDINARIA_BC-001.jpg
-2026-04-07_COMISSAO_CCJ_REUNIAO-ORDINARIA_LGD-012.jpg
-2026-04-15_AUDIENCIA_MEIO-AMBIENTE_CHAPECO_RC-003.jpg
+2026-05-08_S-ORDINARIA_BC-001.jpg
+2026-05-08_COMISSAO_CCJ_REFORMA-TRIBUTARIA_MUN-CHAPECO_BC-001.jpg
+2026-05-08_AUDIENCIA_SAUDE-PUBLICA_MUN-JOINVILLE_RC-003.jpg
+2026-04-08_LITERARIO_100-ANOS-PONTE-HERCILIO-LUZ_DC-012.jpg
 ```
 
-Automatically extracted fields:
+### Automatically extracted fields
 
-| Segment            | Field             | Example                     |
-| ------------------ | ----------------- | --------------------------- |
-| `2026-05-07`       | Date (ISO 8601)   | 07/05/2026                  |
-| `S-ORDINARIA`      | Event type        | Sessão Ordinária            |
-| `SESSAO-ORDINARIA` | Description       | Sessão Ordinária            |
-| `CHAPECO`          | City (optional)   | Chapecó                     |
-| `BC`               | Photographer code | Bruno Collaço/Agência Alesc |
-| `001`              | Sequence number   | 001                         |
+| Segment       | Field                       | Example output                     |
+| ------------- | --------------------------- | ---------------------------------- |
+| `2026-05-08`  | Date, Year, Month           | 08/05/2026                         |
+| `S-ORDINARIA` | Event type                  | Sessão Ordinária                   |
+| `CCJ`         | Commission (after COMISSAO) | Comissão de Constituição e Justiça |
+| `MUN-CHAPECO` | Municipality                | Chapecó                            |
+| `BC`          | Photographer                | Bruno Collaço/Agência Alesc        |
+| `001`         | Sequence number             | 001                                |
 
-### Supported Event Types
+### Supported event types
 
-| Code          | Name                                        |
-| ------------- | ------------------------------------------- |
-| `S-ORDINARIA` | Sessão Ordinária                            |
-| `S-ESPECIAL`  | Sessão Especial                             |
-| `S-SOLENE`    | Sessão Solene                               |
-| `PAB`         | Programa Antonieta de Barros                |
-| `COMISSAO`    | Comissão (+ subtype e.g. `CCJ`, `EDUCACAO`) |
-| `AUDIENCIA`   | Audiência Pública                           |
-| `SEMINARIO`   | Seminário                                   |
-| `CURSO`       | Curso                                       |
-| `ENTREVISTA`  | Entrevista                                  |
-| `PODCAST`     | Podcast                                     |
-| `ESPECIAL`    | Matéria Especial                            |
-| `MOCAO`       | Moção de Aplauso                            |
-| `PRESIDENCIA` | Presidência                                 |
-| `SUSPENSAO`   | Suspensão de Sessão                         |
-| `LITERARIO`   | Lançamento Literário                        |
-| `EXPOARTE`    | Exposição de Arte                           |
-| `CULTURAL`    | Evento Cultural                             |
+| Code          | Name                                    |
+| ------------- | --------------------------------------- |
+| `S-ORDINARIA` | Sessão Ordinária                        |
+| `S-ESPECIAL`  | Sessão Especial                         |
+| `S-SOLENE`    | Sessão Solene                           |
+| `PAB`         | Programa Antonieta de Barros            |
+| `COMISSAO`    | Comissão (requires subtype — see below) |
+| `AUDIENCIA`   | Audiência Pública                       |
+| `SEMINARIO`   | Seminário                               |
+| `CURSO`       | Curso                                   |
+| `ENTREVISTA`  | Entrevista                              |
+| `PODCAST`     | Podcast                                 |
+| `ESPECIAL`    | Matéria Especial                        |
+| `MOCAO`       | Moção de Aplauso                        |
+| `PRESIDENCIA` | Presidência                             |
+| `SUSPENSAO`   | Suspensão de Sessão                     |
+| `LITERARIO`   | Lançamento Literário                    |
+| `EXPOARTE`    | Exposição de Arte                       |
+| `CULTURAL`    | Evento Cultural                         |
 
-### Supported Commissions (COMISSAO subtype)
+### Supported commissions (COMISSAO subtype)
 
-| Code            | Full name                                       |
-| --------------- | ----------------------------------------------- |
-| `CCJ`           | Comissão de Constituição e Justiça              |
-| `EDUCACAO`      | Comissão de Educação e Cultura                  |
-| `SEGURANCA`     | Comissão de Segurança Pública                   |
-| `MEIO-AMBIENTE` | Comissão de Meio Ambiente                       |
-| `ECONOMIA`      | Comissão de Economia                            |
-| `SAUDE`         | Comissão de Saúde                               |
-| `TRABALHO`      | Comissão de Trabalho                            |
-| `TRANSPORTE`    | Comissão de Transporte                          |
-| `TURISMO`       | Comissão de Turismo                             |
-| `AGRICULTURA`   | Comissão de Agricultura e Desenvolvimento Rural |
-| `ETICA`         | Comissão de Ética                               |
-| `CPI`           | Comissão Parlamentar de Inquérito               |
-| `MISTA`         | Comissão Mista                                  |
-| _(+ 10 others)_ | See `tagflow-connector.php` for full list       |
+| Code            | Full name                                 |
+| --------------- | ----------------------------------------- |
+| `CCJ`           | Comissão de Constituição e Justiça        |
+| `EDUCACAO`      | Comissão de Educação e Cultura            |
+| `SEGURANCA`     | Comissão de Segurança Pública             |
+| `MEIO-AMBIENTE` | Comissão de Meio Ambiente                 |
+| `ECONOMIA`      | Comissão de Economia                      |
+| `SAUDE`         | Comissão de Saúde                         |
+| `CPI`           | Comissão Parlamentar de Inquérito         |
+| `MISTA`         | Comissão Mista                            |
+| _(+ 15 others)_ | See `tagflow-connector.php` for full list |
+
+### Municipality prefix
+
+Use `MUN-` prefix to unambiguously identify municipalities. Works for all 295 SC cities without maintaining a complete list.
+
+```
+MUN-CHAPECO       → Chapecó
+MUN-SAO-JOSE      → São José
+MUN-JOINVILLE     → Joinville
+MUN-ARARANGUA     → Araranguá
+```
+
+Cities in the built-in dictionary receive correct accents automatically. Cities outside the dictionary receive automatic formatting without accents — acceptable for MVP.
 
 ---
 
-## WordPress Integration
+## WordPress Plugin (v1.8)
 
-The plugin populates the following WordPress fields automatically on upload:
+### What it does
 
-| WordPress field    | Source                         | Timing       |
-| ------------------ | ------------------------------ | ------------ |
-| Title              | Filename (event type + date)   | Instant      |
-| Caption            | Filename (photographer credit) | Instant      |
-| Alt text           | Filename (event + institution) | Instant      |
-| Description        | Filename (full context)        | Instant      |
-| Photographer       | Filename (code → full name)    | Instant      |
-| Event type         | Filename (event type code)     | Instant      |
-| Commission         | Filename (COMISSAO subtype)    | Instant      |
-| Municipality       | Filename (optional city block) | Instant      |
-| Event date         | Filename (ISO 8601 date)       | Instant      |
-| Deputies (persons) | Facial recognition + review    | Asynchronous |
-| Party              | Derived from deputy mapping    | Asynchronous |
+- Runs automatically on every image upload — no action required
+- Ignores files from other departments (no ISO 8601 date prefix → ignored)
+- Ignores unknown event types → ignored without touching the database
+- Prevents reprocessing of manually edited fields (`_alesc_processado` flag)
+- Fills native WordPress fields: title, caption, alt text
+- Fills custom fields: photographer, date, event, commission, municipality, year
+- Logs all processing decisions to PHP error log for auditability
+- Compatible with PHP 7.2+ — safe fallback if `mbstring` is not available
 
-> WordPress custom fields pending confirmation. Lines marked `# adaptar` in `tagflow-connector.php` must be updated with actual `meta_key` values.
+### WordPress fields populated
+
+| Field                      | Source   | Notes                                        |
+| -------------------------- | -------- | -------------------------------------------- |
+| Title                      | Filename | Event type — Commission — Description — Date |
+| Caption                    | Filename | `Foto: Photographer Name/Agência Alesc`      |
+| Alt text                   | Filename | Event — Location — ALESC                     |
+| `_wp_attachment_image_alt` | Filename | Standard WordPress alt text meta             |
+| `fotografo`                | Filename | Photographer full name — **adapt meta_key**  |
+| `alesc_data`               | Filename | Date DD/MM/YYYY — **adapt meta_key**         |
+| `alesc_evento`             | Filename | Event type name — **adapt meta_key**         |
+| `alesc_comissao`           | Filename | Commission full name — **adapt meta_key**    |
+| `alesc_municipio`          | Filename | Municipality — **adapt meta_key**            |
+| `alesc_ano`                | Filename | Year — **adapt meta_key**                    |
+| `alesc_filename_original`  | Filename | Original filename for traceability — fixed   |
+
+> Meta keys marked **adapt meta_key** must be updated to match the actual field names in the ALESC WordPress installation. Contact the WordPress developer for the correct `meta_key` values.
+
+### Installation
+
+1. Copy `wordpress-plugin/tagflow-connector/` to `wp-content/plugins/`
+2. Activate at Admin → Plugins
+3. Update `meta_keys` marked `// adaptar` in `tagflow-connector.php`
+
+### Multi-sector safety
+
+The plugin operates on an opt-in basis. Two filtering layers protect uploads from other departments:
+
+1. **Filename must start with `YYYY-MM-DD_`** — immediate return if not matched
+2. **Event type must be in the known types dictionary** — return without touching the database if not recognized
+
+Files from Legal, HR, TV ALESC, or any other department are never processed.
 
 ---
 
-## Installation
+## Lightroom Integration
 
-### Requirements
+Photographers export photos from Adobe Lightroom with IPTC keywords pre-embedded. This eliminates manual tagging at upload time.
 
-- Python 3.10+
-- ExifTool (`sudo apt install libimage-exiftool-perl`)
-- CMake and build tools (`sudo apt install cmake build-essential`)
-- WordPress with media library access (for plugin)
+### Setup
 
-### Python Worker Setup
+1. Import `ALESC_Palavras_Chave_Lightroom.txt` into Lightroom keyword panel
+2. Create export preset with ISO 8601 filename template
+3. Before each export, select relevant keywords (2–3 clicks per event batch)
+
+### Keyword hierarchy
+
+The keyword file includes hierarchical terms with synonyms for automatic expansion:
+
+```
+ALESC
+  └── Sessões
+        ├── Sessão Ordinária {plenário, votação, legislativo, ALESC, SC}
+        ├── Sessão Especial  {plenário, legislativo, ALESC, SC}
+        └── Sessão Solene    {plenário, homenagem, título honorífico, ALESC, SC}
+  └── Comissões e Frentes Parlamentares
+        ├── Comissão de Constituição e Justiça {CCJ, ALESC}
+        └── ...
+FOTÓGRAFOS
+MUNICÍPIOS
+DEPUTADOS
+TEMAS
+FORMATO
+```
+
+Selecting "Sessão Ordinária" automatically exports: `Sessão Ordinária, Plenário, Sessões, ALESC, Santa Catarina`.
+
+---
+
+## Python Worker — Facial Recognition
+
+### Installation
 
 ```bash
 git clone https://github.com/rodolfoespinola/tagflow.git
@@ -208,15 +273,9 @@ pip install -r requirements.txt
 mkdir -p referencias/deputados fotos/entrada storage/{json,embeddings,logs}
 ```
 
-### WordPress Plugin Setup
+### Reference database
 
-1. Copy `wordpress-plugin/tagflow-connector/` to `wp-content/plugins/`
-2. Activate the plugin at Admin → Plugins
-3. Update lines marked `# adaptar` in `tagflow-connector.php` with actual `meta_key` values from your WordPress installation
-
-### Reference Database
-
-Add reference photos of known individuals to `referencias/deputados/`:
+Add reference photos to `referencias/deputados/` following this naming pattern:
 
 ```
 ana_campagnolo_01.jpg
@@ -224,47 +283,47 @@ ana_campagnolo_02.jpg
 lucas_neves_01.jpg
 ```
 
-Multiple photos per person improve accuracy. Controlled lighting and varied angles recommended. The system supports 20+ reference photos per person.
+Multiple photos per person improve accuracy. 20+ photos with controlled lighting and varied angles recommended. The system was tested with 359 reference photos across 40 deputies.
 
----
-
-## Usage
-
-### 1. WordPress plugin (automatic)
-
-Once activated, the plugin runs on every image upload with no action required.
-
-### 2. Start the facial recognition worker
+### Usage
 
 ```bash
+# Start folder monitor
 source venv-tagflow/bin/activate
 python monitor.py
-```
 
-### 3. Start the review interface (separate terminal)
-
-```bash
-source venv-tagflow/bin/activate
+# Start review interface (separate terminal)
 python app.py
 ```
 
-Open `http://localhost:5000` in your browser.
+Open `http://localhost:5000` in browser.
 
-### 4. Review workflow
+### Review workflow
 
-1. Reviewer opens the interface when time allows — no deadline pressure
+1. Reviewer opens Flask interface when time allows — no deadline pressure
 2. Each photo shows AI suggestions with confidence scores
 3. Pre-approved matches (≥55% confidence) require only confirmation
 4. Reviewer corrects errors, adds unrecognized individuals, approves
-5. WordPress is updated via REST API with confirmed identities
+5. WordPress updated with confirmed deputy identities and party affiliations
 
----
+### Recognition performance
 
-## Configuration
+Tested on real ALESC plenary session photos:
 
-### Photographer codes (`monitor.py` and `tagflow-connector.php`)
+| Metric                       | Result                                         |
+| ---------------------------- | ---------------------------------------------- |
+| Face detection confidence    | 1.0 (maximum) on frontal/3/4 shots             |
+| Recognition on lateral shots | ~52% confidence (correctly flagged for review) |
+| Recognition on frontal shots | 60–76% confidence                              |
+| Multiple deputies per photo  | ✓ Tested up to 4 simultaneous                  |
+| Processing per photo         | 3–8 seconds (CPU, no GPU required)             |
+
+### Configuration
 
 ```python
+THRESHOLD      = 0.55  # Maximum cosine distance to accept a match
+THRESHOLD_AUTO = 0.45  # Below this → pre-approved automatically
+
 FOTOGRAFOS = {
     "BC":  "Bruno Collaço/Agência Alesc",
     "DC":  "Daniel Conzi/Agência Alesc",
@@ -275,22 +334,21 @@ FOTOGRAFOS = {
 }
 ```
 
-### Recognition thresholds (`monitor.py`)
+---
 
-```python
-THRESHOLD      = 0.55  # Maximum cosine distance to accept a match
-THRESHOLD_AUTO = 0.45  # Below this → pre-approved automatically
-```
+## Search Integration
 
-### WordPress meta_keys (`tagflow-connector.php`)
+Tagflow is designed to work with **Relevanssi** (WordPress search plugin). Once Relevanssi is configured to index custom fields and keywords, photos become searchable by:
 
-Update lines marked `# adaptar` with actual field names from your WordPress setup:
+- Event type (Sessão Ordinária, CCJ, Audiência Pública...)
+- Photographer name
+- Municipality
+- Deputy name (after facial recognition review)
+- Political party
+- Year and month
+- Thematic keywords (from Lightroom export)
 
-```php
-update_post_meta($attachment_id, 'fotografo', $meta['fotografo']); // adaptar
-update_post_meta($attachment_id, 'alesc_data', $meta['data']);     // adaptar
-update_post_meta($attachment_id, 'alesc_evento', $meta['tipo_nome']); // adaptar
-```
+No additional search plugin required beyond what is already installed.
 
 ---
 
@@ -300,8 +358,29 @@ update_post_meta($attachment_id, 'alesc_evento', $meta['tipo_nome']); // adaptar
 - All facial recognition runs on local hardware (CPU-based, no GPU required)
 - Purpose restricted to internal institutional archive indexing
 - `storage/embeddings/` must not be web-accessible
-- Full audit trail: reviewer name, timestamp, AI suggestion, and human correction recorded per image
+- Full audit trail: reviewer name, timestamp, AI suggestion, and human correction per image
+- Anti-reprocessing flag prevents accidental overwrite of manually corrected fields
 - Compliant with Brazil's LGPD and analogous EU frameworks (GDPR)
+
+---
+
+## Roadmap
+
+### Current (v1.x) — MVP
+
+- [x] WordPress plugin with filename parsing
+- [x] Multi-sector safety (opt-in pattern matching)
+- [x] Facial recognition with human review
+- [x] Lightroom keyword hierarchy
+- [x] SQLite audit log
+
+### Phase 2
+
+- [ ] WordPress admin panel for processed uploads
+- [ ] WP-CLI command for bulk reprocessing of existing library
+- [ ] External JSON/WordPress options for configuration (no PHP edits)
+- [ ] WordPress REST API integration for deputy field updates
+- [ ] Taxonomy support for faceted search
 
 ---
 
@@ -313,10 +392,11 @@ update_post_meta($attachment_id, 'alesc_evento', $meta['tipo_nome']); // adaptar
 | Facial recognition    | [ArcFace](https://arxiv.org/abs/1801.07698)      |
 | ML framework          | [DeepFace](https://github.com/serengil/deepface) |
 | Review interface      | [Flask](https://flask.palletsprojects.com/)      |
-| WordPress integration | PHP plugin + REST API                            |
+| WordPress integration | PHP plugin (v1.8)                                |
 | Metadata injection    | [ExifTool](https://exiftool.org/)                |
 | Processing queue      | SQLite                                           |
 | Audit log             | SQLite                                           |
+| Keyword export        | Adobe Lightroom                                  |
 
 ---
 
@@ -332,96 +412,100 @@ update_post_meta($attachment_id, 'alesc_evento', $meta['tipo_nome']); // adaptar
 
 O Tagflow é um sistema open-source desenvolvido para eliminar o gargalo operacional de tagging manual de centenas de fotos por dia em ambientes institucionais — assembleias legislativas, agências de imprensa, arquivos públicos e veículos de comunicação.
 
-O sistema foi projetado para **não alterar o fluxo editorial existente**: a foto vai ao ar imediatamente após o upload, e o enriquecimento de metadados acontece em segundo plano, sem pressão sobre a equipe.
+O sistema foi projetado em torno de um princípio central: **a publicação das fotos não pode esperar o processamento de metadados**. As fotos vão ao ar imediatamente após o upload. O enriquecimento de metadados acontece em segundo plano, sem pressão editorial.
 
-Desenvolvido para a Assembleia Legislativa de Santa Catarina (ALESC), Brasil. Adaptável para qualquer organização com grande volume de produção fotográfica.
+Desenvolvido para a Assembleia Legislativa de Santa Catarina (ALESC), Brasil.
 
 ---
 
 ## Arquitetura
 
-O sistema opera em duas camadas independentes:
+### Camada 1 — Metadados instantâneos (plugin WordPress)
 
-**Camada 1 — Imediata, sem IA (plugin WordPress)**
-
-```
-Fotógrafo faz upload no WordPress
-        ↓
-Plugin intercepta o upload via hook add_attachment
-        ↓
-Interpreta o nome do arquivo (ISO 8601):
-  2026-05-07_S-ORDINARIA_SESSAO-ORDINARIA_BC-001.jpg
-        ↓
-Preenche campos automaticamente:
-  Título, Legenda, Alt text, Descrição,
-  Fotógrafo, Tipo de evento, Comissão, Município, Data
-        ↓
-Registra arquivo na fila SQLite para processamento de IA
-```
-
-**Camada 2 — Inteligente, assíncrona (worker Python)**
+Sem IA. Sem dependências externas. Executa em milissegundos no upload.
 
 ```
-Worker Python lê a fila a cada 30 segundos
+Fotógrafo exporta pelo Lightroom com keywords IPTC embutidas
         ↓
-RetinaFace detecta rostos na imagem
+Editor faz upload no WordPress (fluxo igual ao atual)
+        ↓
+Plugin verifica se o nome segue o padrão ISO 8601 da Agência ALESC
+Arquivos de outros setores são ignorados automaticamente
+        ↓
+Parseia nome do arquivo → extrai data, tipo de evento,
+  comissão, município, fotógrafo
+        ↓
+Preenche campos do WordPress automaticamente:
+  Título, Legenda, Alt text, Fotógrafo,
+  Tipo de evento, Comissão, Município, Ano
+        ↓
+Foto imediatamente buscável por evento, fotógrafo, comissão
+```
+
+### Camada 2 — Reconhecimento facial (worker Python)
+
+Executa de forma assíncrona. Nunca bloqueia a publicação.
+
+```
+Worker Python monitora pasta de fotos no servidor Montreal
+        ↓
+RetinaFace detecta rostos em cada imagem
         ↓
 ArcFace compara com banco de referência dos deputados
         ↓
-JSON salvo para revisão humana
+Resultados salvos na fila de revisão
         ↓
 Revisor acessa interface Flask quando tiver tempo
         ↓
 Confirma identificações, corrige erros, aprova
         ↓
-WordPress REST API atualizada com deputados e partidos
+WordPress atualizado com nomes dos deputados e partidos
         ↓
-Foto passa a ser buscável por nome e partido
+Foto buscável por nome de deputado e partido político
 ```
 
 ---
 
-## Nomenclatura de arquivos
+## Convenção de nomenclatura
 
 O Tagflow segue o Manual de Nomenclatura ISO 8601 da Agência ALESC:
 
 ```
-AAAA-MM-DD_TIPO-EVENTO_DESCRICAO[_MUNICIPIO]_FOT-SEQ.jpg
+AAAA-MM-DD_TIPO-EVENTO_[SUBTIPO]_[DESCRICAO]_[MUN-CIDADE]_FOT-SEQ.jpg
 ```
 
 Exemplos:
 
 ```
-2026-05-07_S-ORDINARIA_SESSAO-ORDINARIA_BC-001.jpg
-2026-04-07_COMISSAO_CCJ_REUNIAO-ORDINARIA_LGD-012.jpg
-2026-04-15_AUDIENCIA_MEIO-AMBIENTE_CHAPECO_RC-003.jpg
+2026-05-08_S-ORDINARIA_BC-001.jpg
+2026-05-08_COMISSAO_CCJ_REFORMA-TRIBUTARIA_MUN-CHAPECO_BC-001.jpg
+2026-05-08_AUDIENCIA_SAUDE-PUBLICA_MUN-JOINVILLE_RC-003.jpg
 ```
 
-> As categorias de pasta (`SESSOES`, `COMISSOES-E-FRENTES` etc.) existem apenas na estrutura de diretórios do servidor e não são extraídas dos nomes de arquivo.
+O prefixo `MUN-` identifica municípios sem ambiguidade para todos os 295 municípios de SC.
 
 ---
 
-## Integração com WordPress
+## Segurança multisetorial
 
-O plugin preenche os seguintes campos automaticamente no upload:
+O plugin opera em modo opt-in. Duas camadas de filtragem protegem uploads de outros setores:
 
-| Campo WordPress | Origem                              | Momento    |
-| --------------- | ----------------------------------- | ---------- |
-| Título          | Nome do arquivo                     | Imediato   |
-| Legenda         | Nome do arquivo (crédito)           | Imediato   |
-| Alt text        | Nome do arquivo                     | Imediato   |
-| Descrição       | Nome do arquivo                     | Imediato   |
-| Fotógrafo       | Código → nome completo              | Imediato   |
-| Tipo de evento  | Código do evento                    | Imediato   |
-| Comissão        | Subtipo de COMISSAO                 | Imediato   |
-| Município       | Bloco opcional                      | Imediato   |
-| Data do evento  | Data ISO 8601                       | Imediato   |
-| Deputados       | Reconhecimento facial + revisão     | Assíncrono |
-| Partido         | Derivado do mapeamento de deputados | Assíncrono |
+1. **Nome deve começar com `AAAA-MM-DD_`** — retorno imediato se não corresponder
+2. **Tipo de evento deve estar no dicionário** — retorno sem tocar no banco se não reconhecido
+
+Arquivos da Assessoria Jurídica, RH, TV ALESC ou qualquer outro setor nunca são processados.
 
 ---
 
 ## Instalação
+
+### Plugin WordPress
+
+1. Copiar `wordpress-plugin/tagflow-connector/` para `wp-content/plugins/`
+2. Ativar em Admin → Plugins
+3. Atualizar `meta_keys` marcados com `// adaptar` conforme os campos reais do WordPress da ALESC
+
+### Worker Python
 
 ```bash
 git clone https://github.com/rodolfoespinola/tagflow.git
@@ -435,7 +519,9 @@ pip install -r requirements.txt
 mkdir -p referencias/deputados fotos/entrada storage/{json,embeddings,logs}
 ```
 
-**Plugin WordPress:** copiar `wordpress-plugin/tagflow-connector/` para `wp-content/plugins/` e ativar em Admin → Plugins. Atualizar as linhas marcadas `# adaptar` com os `meta_key` reais do WordPress da ALESC.
+### Lightroom
+
+Importar `ALESC_Palavras_Chave_Lightroom.txt` no painel de palavras-chave do Lightroom. A hierarquia completa com sinônimos automáticos aparece pronta para uso.
 
 ---
 
@@ -444,6 +530,6 @@ mkdir -p referencias/deputados fotos/entrada storage/{json,embeddings,logs}
 - Embeddings biométricos armazenados localmente — nenhum dado enviado a servidores externos
 - Todo o processamento de IA roda no hardware local (CPU, sem necessidade de GPU)
 - Finalidade restrita a indexação interna de acervo institucional
-- Diretório `storage/embeddings/` não deve ter acesso web
-- Log de auditoria rastreia todas as decisões humanas com nome do revisor, timestamp, sugestão da IA e correção humana
+- Log de auditoria rastreia todas as decisões humanas com revisor, timestamp e sugestão da IA
+- Flag anti-reprocessamento impede sobrescrita acidental de campos corrigidos manualmente
 - Compatível com a LGPD e frameworks análogos da União Europeia (GDPR)
