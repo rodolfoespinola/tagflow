@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALESC Media Connector
  * Description: Preenche automaticamente campos de mídia a partir do nome do arquivo
- * Version: 1.3
+ * Version: 1.4
  * Author: Agência ALESC
  * Requires PHP: 7.2
  */
@@ -87,14 +87,20 @@ function alesc_comissoes() {
 }
 
 // ─── HELPERS MULTIBYTE ────────────────────────────────────────────────────────
-// Garante tratamento correto de acentos em português independente do servidor
+// Fallback seguro para servidores sem mbstring habilitado
 
 function alesc_strtolower($str) {
-    return mb_strtolower($str, 'UTF-8');
+    if (extension_loaded('mbstring')) {
+        return mb_strtolower($str, 'UTF-8');
+    }
+    return strtolower($str);
 }
 
 function alesc_ucwords($str) {
-    return mb_convert_case($str, MB_CASE_TITLE, 'UTF-8');
+    if (extension_loaded('mbstring')) {
+        return mb_convert_case($str, MB_CASE_TITLE, 'UTF-8');
+    }
+    return ucwords($str);
 }
 
 function alesc_formatar_texto($str) {
@@ -103,8 +109,6 @@ function alesc_formatar_texto($str) {
 
 // ─── PARSER DO NOME DO ARQUIVO ────────────────────────────────────────────────
 function alesc_parsear_filename($filename) {
-    // Converte para maiúsculas usando strtoupper — seguro porque o filename
-    // segue o manual ISO 8601 sem acentos (AAAA-MM-DD_TIPO_DESC_COD-SEQ)
     $nome   = strtoupper(pathinfo($filename, PATHINFO_FILENAME));
     $blocos = explode('_', $nome);
 
@@ -122,7 +126,6 @@ function alesc_parsear_filename($filename) {
         'filename_original' => $filename,
     );
 
-    // Meses com acentos corretos via array — não depende de funções locale
     $meses = array(
         '01' => 'Janeiro',   '02' => 'Fevereiro', '03' => 'Março',
         '04' => 'Abril',     '05' => 'Maio',       '06' => 'Junho',
@@ -162,27 +165,22 @@ function alesc_parsear_filename($filename) {
             $subtipo           = array_shift($blocos);
             $meta['tipo']      = 'COMISSAO';
             $meta['tipo_nome'] = 'Comissão';
-            // Nome da comissão já vem com acentos corretos do array
             $meta['comissao']  = isset($comissoes[$subtipo])
                                  ? $comissoes[$subtipo]
                                  : alesc_ucwords(alesc_strtolower(str_replace('-', ' ', $subtipo)));
         } else {
             $meta['tipo']      = $tipo;
-            // Nome do tipo já vem com acentos corretos do array
-            $meta['tipo_nome'] = isset($tipos[$tipo])
-                                 ? $tipos[$tipo]
-                                 : null;
+            $meta['tipo_nome'] = isset($tipos[$tipo]) ? $tipos[$tipo] : null;
         }
     }
 
     // Blocos restantes — município com prefixo MUN- e descrição
-    // MUN- funciona para qualquer município de SC sem lista limitada
+    // Prefixo MUN- resolve ambiguidade para todos os 295 municípios de SC
     // Exemplo: MUN-CHAPECO, MUN-SAO-JOSE, MUN-BALNEARIO-CAMBORIU
     $descricao_blocos = array();
     foreach ($blocos as $bloco) {
         if (strpos($bloco, 'MUN-') === 0) {
             $municipio_raw     = substr($bloco, 4);
-            // Formata com multibyte: SAO-JOSE → São Jose
             $meta['municipio'] = alesc_formatar_texto($municipio_raw);
         } else {
             $descricao_blocos[] = $bloco;
@@ -190,7 +188,6 @@ function alesc_parsear_filename($filename) {
     }
 
     if (!empty($descricao_blocos)) {
-        // Formata descrição com multibyte
         $meta['descricao'] = alesc_ucwords(alesc_strtolower(
             implode(' ', array_map(function($b) {
                 return str_replace('-', ' ', $b);
@@ -212,7 +209,7 @@ function alesc_processar_upload($metadata, $attachment_id) {
     $filename = basename($arquivo);
     $meta     = alesc_parsear_filename($filename);
 
-    // Arquivo sem nomenclatura padrão — ignora sem poluir o banco
+    // Arquivo fora do padrão — ignora sem poluir o banco
     if (empty($meta['tipo_nome'])) {
         error_log('ALESC Media Connector: nomenclatura não reconhecida — ' . $filename);
         return $metadata;
@@ -227,12 +224,14 @@ function alesc_processar_upload($metadata, $attachment_id) {
         $meta['descricao'],
         $meta['data'] ? '— ' . $meta['data'] : null,
     ));
-    $titulo = sanitize_text_field(implode(' ', $partes_titulo));
+    $titulo = implode(' ', $partes_titulo);
+    // wp_update_post() sanitiza post_title internamente — não sanitizar antes
 
     // ── Legenda ───────────────────────────────────────────────────────────────
     $legenda = !empty($meta['fotografo'])
-               ? sanitize_text_field('Foto: ' . $meta['fotografo'])
+               ? 'Foto: ' . $meta['fotografo']
                : '';
+    // wp_update_post() sanitiza post_excerpt internamente — não sanitizar antes
 
     // ── Alt text ──────────────────────────────────────────────────────────────
     $partes_alt = array_filter(array(
@@ -259,9 +258,10 @@ function alesc_processar_upload($metadata, $attachment_id) {
     }
 
     // ── Campos customizados ───────────────────────────────────────────────────
-    // Adaptar os meta_keys abaixo conforme os campos do WordPress da ALESC
+    // Sanitize aplicado aqui — meta fields não passam por sanitização interna do WP
+    // Adaptar os meta_keys conforme os campos do WordPress da ALESC
 
-    // Rastreabilidade — salvo sempre, independente do padrão de nomenclatura
+    // Rastreabilidade — salvo sempre, meta_key fixo
     update_post_meta(
         $attachment_id,
         'alesc_filename_original',
