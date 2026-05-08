@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALESC Media Connector
  * Description: Preenche automaticamente campos de mídia a partir do nome do arquivo
- * Version: 1.5
+ * Version: 1.6
  * Author: Agência ALESC
  * Requires PHP: 7.2
  */
@@ -86,59 +86,55 @@ function alesc_comissoes() {
     return $cache;
 }
 
-// Dicionário de municípios com acentuação correta
-// Cobre os mais frequentes em pautas da ALESC
-// Municípios fora da lista saem sem acento (Sao Jose → Sao Jose) — aceitável para MVP
 function alesc_municipios_dict() {
     static $cache = null;
     if ($cache === null) {
         $cache = array(
-            'FLORIANOPOLIS'        => 'Florianópolis',
-            'CHAPECO'              => 'Chapecó',
-            'JOINVILLE'            => 'Joinville',
-            'BLUMENAU'             => 'Blumenau',
-            'ITAJAI'               => 'Itajaí',
-            'CRICIUMA'             => 'Criciúma',
-            'SAO-JOSE'             => 'São José',
-            'LAGES'                => 'Lages',
-            'JARAGUA-DO-SUL'       => 'Jaraguá do Sul',
-            'BALNEARIO-CAMBORIU'   => 'Balneário Camboriú',
-            'BRUSQUE'              => 'Brusque',
-            'TUBARAO'              => 'Tubarão',
-            'CONCORDIA'            => 'Concórdia',
-            'CACADOR'              => 'Caçador',
-            'MAFRA'                => 'Mafra',
-            'CANOINHAS'            => 'Canoinhas',
-            'SAO-BENTO-DO-SUL'     => 'São Bento do Sul',
-            'RIO-DO-SUL'           => 'Rio do Sul',
-            'BIGUACU'              => 'Biguaçu',
-            'PALHOCA'              => 'Palhoça',
-            'XANXERE'              => 'Xanxerê',
-            'CURITIBANOS'          => 'Curitibanos',
-            'ARARANGUA'            => 'Araranguá',
-            'IMBITUBA'             => 'Imbituba',
-            'LAGUNA'               => 'Laguna',
-            'ORLEANS'              => 'Orleans',
-            'URUSSANGA'            => 'Urussanga',
-            'ICARA'                => 'Içara',
-            'JOACABA'              => 'Joaçaba',
-            'VIDEIRA'              => 'Videira',
-            'CAMPOS-NOVOS'         => 'Campos Novos',
-            'HERVAL-DO-OESTE'      => 'Herval do Oeste',
-            'TANGARA'              => 'Tangará',
-            'SAO-MIGUEL-DO-OESTE'  => 'São Miguel do Oeste',
-            'MARAVILHA'            => 'Maravilha',
-            'PINHALZINHO'          => 'Pinhalzinho',
-            'PALMITOS'             => 'Palmitos',
-            'QUILOMBO'             => 'Quilombo',
-            'SAO-LOURENCO-DO-OESTE'=> 'São Lourenço do Oeste',
+            'FLORIANOPOLIS'         => 'Florianópolis',
+            'CHAPECO'               => 'Chapecó',
+            'JOINVILLE'             => 'Joinville',
+            'BLUMENAU'              => 'Blumenau',
+            'ITAJAI'                => 'Itajaí',
+            'CRICIUMA'              => 'Criciúma',
+            'SAO-JOSE'              => 'São José',
+            'LAGES'                 => 'Lages',
+            'JARAGUA-DO-SUL'        => 'Jaraguá do Sul',
+            'BALNEARIO-CAMBORIU'    => 'Balneário Camboriú',
+            'BRUSQUE'               => 'Brusque',
+            'TUBARAO'               => 'Tubarão',
+            'CONCORDIA'             => 'Concórdia',
+            'CACADOR'               => 'Caçador',
+            'MAFRA'                 => 'Mafra',
+            'CANOINHAS'             => 'Canoinhas',
+            'SAO-BENTO-DO-SUL'      => 'São Bento do Sul',
+            'RIO-DO-SUL'            => 'Rio do Sul',
+            'BIGUACU'               => 'Biguaçu',
+            'PALHOCA'               => 'Palhoça',
+            'XANXERE'               => 'Xanxerê',
+            'CURITIBANOS'           => 'Curitibanos',
+            'ARARANGUA'             => 'Araranguá',
+            'IMBITUBA'              => 'Imbituba',
+            'LAGUNA'                => 'Laguna',
+            'ORLEANS'               => 'Orleans',
+            'URUSSANGA'             => 'Urussanga',
+            'ICARA'                 => 'Içara',
+            'JOACABA'               => 'Joaçaba',
+            'VIDEIRA'               => 'Videira',
+            'CAMPOS-NOVOS'          => 'Campos Novos',
+            'HERVAL-DO-OESTE'       => 'Herval do Oeste',
+            'TANGARA'               => 'Tangará',
+            'SAO-MIGUEL-DO-OESTE'   => 'São Miguel do Oeste',
+            'MARAVILHA'             => 'Maravilha',
+            'PINHALZINHO'           => 'Pinhalzinho',
+            'PALMITOS'              => 'Palmitos',
+            'QUILOMBO'              => 'Quilombo',
+            'SAO-LOURENCO-DO-OESTE' => 'São Lourenço do Oeste',
         );
     }
     return $cache;
 }
 
 // ─── HELPERS MULTIBYTE ────────────────────────────────────────────────────────
-// Fallback seguro para servidores sem mbstring habilitado
 
 function alesc_strtolower($str) {
     if (extension_loaded('mbstring')) {
@@ -231,8 +227,7 @@ function alesc_parsear_filename($filename) {
 
     foreach ($blocos as $bloco) {
         if (strpos($bloco, 'MUN-') === 0) {
-            $municipio_raw = substr($bloco, 4);
-            // Verifica dicionário primeiro para acentuação correta
+            $municipio_raw     = substr($bloco, 4);
             $meta['municipio'] = isset($municipios_dict[$municipio_raw])
                                  ? $municipios_dict[$municipio_raw]
                                  : alesc_formatar_texto($municipio_raw);
@@ -255,7 +250,16 @@ function alesc_parsear_filename($filename) {
 // ─── HOOK PRINCIPAL ───────────────────────────────────────────────────────────
 function alesc_processar_upload($metadata, $attachment_id) {
 
-    if (!wp_attachment_is_image($attachment_id)) {
+    // Verifica MIME type — mais robusto que wp_attachment_is_image() isolado
+    $mime = get_post_mime_type($attachment_id);
+    if (!$mime || strpos($mime, 'image/') !== 0) {
+        return $metadata;
+    }
+
+    // Verifica caminho do arquivo antes de qualquer operação
+    $arquivo = get_attached_file($attachment_id);
+    if (!$arquivo) {
+        error_log('ALESC Media Connector: arquivo não encontrado — attachment_id ' . $attachment_id);
         return $metadata;
     }
 
@@ -266,7 +270,6 @@ function alesc_processar_upload($metadata, $attachment_id) {
         return $metadata;
     }
 
-    $arquivo  = get_attached_file($attachment_id);
     $filename = basename($arquivo);
     $meta     = alesc_parsear_filename($filename);
 
@@ -310,10 +313,16 @@ function alesc_processar_upload($metadata, $attachment_id) {
     if (!empty($titulo))  $post_data['post_title']  = $titulo;
     if (!empty($legenda)) $post_data['post_excerpt'] = $legenda;
 
+    $update_ok = true;
     if (count($post_data) > 1) {
         remove_filter('wp_generate_attachment_metadata', 'alesc_processar_upload', 10);
-        wp_update_post($post_data);
+        $result = wp_update_post($post_data, true);
         add_filter('wp_generate_attachment_metadata', 'alesc_processar_upload', 10, 2);
+
+        if (is_wp_error($result)) {
+            error_log('ALESC Media Connector: erro em wp_update_post — ' . $result->get_error_message());
+            $update_ok = false;
+        }
     }
 
     // ── Campos customizados ───────────────────────────────────────────────────
@@ -369,10 +378,14 @@ function alesc_processar_upload($metadata, $attachment_id) {
         );
     }
 
-    // Marca como processado — impede reprocessamento por regeneração de thumbnails
-    update_post_meta($attachment_id, '_alesc_processado', 1);
-
-    error_log('ALESC Media Connector: concluído — attachment_id ' . $attachment_id);
+    // Marca como processado apenas se wp_update_post foi bem-sucedido
+    // Evita attachment marcado como processado com metadados incompletos
+    if ($update_ok) {
+        update_post_meta($attachment_id, '_alesc_processado', 1);
+        error_log('ALESC Media Connector: concluído — attachment_id ' . $attachment_id);
+    } else {
+        error_log('ALESC Media Connector: processamento parcial — attachment_id ' . $attachment_id);
+    }
 
     return $metadata;
 }
