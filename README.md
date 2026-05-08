@@ -69,11 +69,12 @@ Photo searchable by person and political party
 
 ```
 tagflow/
-├── monitor.py                      # Python worker — facial recognition engine
+├── monitor.py                      # Python worker — folder watcher + facial recognition
 ├── app.py                          # Flask review web interface
+├── teste_reconhecimento.py         # Diagnostic tool — threshold calibration and testing
 ├── requirements.txt
+├── README.md
 ├── wordpress-plugin/
-│   ├── README.md
 │   └── tagflow-connector/
 │       └── tagflow-connector.php   # WordPress plugin (v1.8)
 ├── referencias/
@@ -444,8 +445,9 @@ Adicionar fotos de referência em `referencias/deputados/` com o padrão `nome_d
 
 ```bash
 source venv-tagflow/bin/activate
-python monitor.py   # monitor de pasta
-python app.py       # interface de revisão (terminal separado)
+python monitor.py          # monitor de pasta
+python app.py              # interface de revisão (terminal separado)
+# python teste_reconhecimento.py foto.jpg  # diagnóstico e calibração de threshold
 ```
 
 Acessar `http://localhost:5000` no navegador.
