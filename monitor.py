@@ -33,26 +33,79 @@ FOTOGRAFOS = {
     "JB":  "Jefferson Baldo/Agência Alesc",
 }
 
-# Categorias que têm comissão/nome específico no lugar do evento
-LOCAIS_COM_ESPECIFICIDADE = {
-    "Comissoes e Frentes Parlamentares": "comissao",
-    "Audiencias Publicas, Foruns e Seminarios": "municipio",
-    "Eventos Gerais": "municipio",
+CATEGORIAS = {
+    "AGENCIA-ALESC-E-OUTROS",
+    "CURSOS-AUDIENCIAS-FORUNS-SEMINARIOS",
+    "BANCO-DE-IMAGENS",
+    "COMISSOES-E-FRENTES",
+    "GALERIAS-E-HALL",
+    "SESSOES",
 }
 
-# Normalização de nomes de locais para IPTC
-LOCAIS_NORMALIZADOS = {
-    "Plenario": "Plenário",
-    "Comissoes e Frentes Parlamentares": "Comissões e Frentes Parlamentares",
-    "Audiencias Publicas, Foruns e Seminarios": "Audiências Públicas, Fóruns e Seminários",
-    "Sessao Especiais e Solenes": "Sessões Especiais e Solenes",
-    "Presidencia": "Presidência",
-    "Eventos Gerais": "Eventos Gerais",
-    "Agencia ALESC": "Agência ALESC",
-    "Fotos Painel": "Fotos Painel",
-    "Galeria de Artes e Hall": "Galeria de Artes e Hall",
-    "Gerencia Cultural": "Gerência Cultural",
-    "Banco de Imagens": "Banco de Imagens",
+TIPO_PARA_CATEGORIA = {
+    "PODCAST":      "AGENCIA-ALESC-E-OUTROS",
+    "ENTREVISTA":   "AGENCIA-ALESC-E-OUTROS",
+    "MOCAO":        "AGENCIA-ALESC-E-OUTROS",
+    "SUSPENSAO":    "AGENCIA-ALESC-E-OUTROS",
+    "PRESIDENCIA":  "AGENCIA-ALESC-E-OUTROS",
+    "ESPECIAL":     "AGENCIA-ALESC-E-OUTROS",
+    "CULTURAL":     "GALERIAS-E-HALL",
+    "EXPOARTE":     "GALERIAS-E-HALL",
+    "LITERARIO":    "GALERIAS-E-HALL",
+    "CURSO":        "CURSOS-AUDIENCIAS-FORUNS-SEMINARIOS",
+    "AUDIENCIA":    "CURSOS-AUDIENCIAS-FORUNS-SEMINARIOS",
+    "SEMINARIO":    "CURSOS-AUDIENCIAS-FORUNS-SEMINARIOS",
+    "S-ORDINARIA":  "SESSOES",
+    "S-ESPECIAL":   "SESSOES",
+    "S-SOLENE":     "SESSOES",
+    "PAB":          "SESSOES",
+    "COMISSAO":     "COMISSOES-E-FRENTES",
+}
+
+TIPO_PARA_NOME = {
+    "PODCAST":      "Podcast",
+    "CULTURAL":     "Evento Cultural",
+    "CURSO":        "Curso",
+    "AUDIENCIA":    "Audiência Pública",
+    "ENTREVISTA":   "Entrevista",
+    "EXPOARTE":     "Exposição de Arte",
+    "LITERARIO":    "Lançamento Literário",
+    "MOCAO":        "Moção de Aplauso",
+    "SEMINARIO":    "Seminário",
+    "SUSPENSAO":    "Suspensão de Sessão",
+    "S-ESPECIAL":   "Sessão Especial",
+    "S-ORDINARIA":  "Sessão Ordinária",
+    "S-SOLENE":     "Sessão Solene",
+    "PAB":          "Programa Antonieta de Barros",
+    "PRESIDENCIA":  "Presidência",
+    "ESPECIAL":     "Matéria Especial",
+    "COMISSAO":     "Comissão",
+}
+
+COMISSOES = {
+    "AGRICULTURA":            "Comissão de Agricultura e Desenvolvimento Rural",
+    "ASSUNTOS-MUNICIPAIS":    "Comissão de Assuntos Municipais",
+    "BEM-ESTAR-ANIMAL":       "Comissão de Bem-Estar Animal",
+    "COMBATE-AS-DROGAS":      "Comissão de Combate às Drogas",
+    "CCJ":                    "Comissão de Constituição e Justiça",
+    "DEFESA-CIVIL":           "Comissão de Defesa Civil",
+    "DIREITOS-HUMANOS":       "Comissão de Direitos Humanos e Família",
+    "ECONOMIA":               "Comissão de Economia",
+    "EDUCACAO":               "Comissão de Educação e Cultura",
+    "ESPORTE":                "Comissão de Esporte",
+    "ETICA":                  "Comissão de Ética",
+    "MEIO-AMBIENTE":          "Comissão de Meio Ambiente",
+    "PESCA":                  "Comissão de Pesca e Aquicultura",
+    "SEGURANCA":              "Comissão de Segurança Pública",
+    "TRABALHO":               "Comissão de Trabalho",
+    "TRANSPORTE":             "Comissão de Transporte",
+    "TURISMO":                "Comissão de Turismo",
+    "CONSUMIDOR":             "Comissão dos Direitos do Consumidor",
+    "CRIANCA-E-ADOLESCENTE":  "Comissão dos Direitos da Criança e do Adolescente",
+    "PESSOA-COM-DEFICIENCIA": "Comissão dos Direitos da Pessoa com Deficiência",
+    "PESSOA-IDOSA":           "Comissão dos Direitos da Pessoa Idosa",
+    "MISTA":                  "Comissão Mista",
+    "CPI":                    "Comissão Parlamentar de Inquérito",
 }
 
 DB_PATH          = PASTA_LOGS / "auditoria.db"
@@ -66,111 +119,116 @@ def remover_acentos(texto):
 
 def extrair_metadados_caminho(caminho_foto):
     """
-    Extrai metadados da estrutura de pastas e nome do arquivo.
+    Extrai metadados da estrutura de pastas e nome do arquivo
+    seguindo o Manual de Nomenclatura oficial da Agência ALESC.
 
-    Estrutura atual:
-    RAIZ / Fotos AAAA / MM - Mês / Local / DDMMAAAA_Evento_Fotografo / foto.jpg
+    Estrutura de pasta:
+    RAIZ / AAAA / MM / CATEGORIA / AAAA-MM-DD_TIPO_DESCRICAO[_MUNICIPIO] /
 
-    Estrutura futura:
-    RAIZ / Fotos AAAA / MM - Mês / Local / DDMMAAAA_Evento / DDMMAAAA_Evento_Municipio_Tema_Fotografo_SEQ.jpg
+    Estrutura de arquivo:
+    AAAA-MM-DD_TIPO_DESCRICAO[_MUNICIPIO]_COD-SEQ.jpg
     """
     partes = caminho_foto.relative_to(PASTA_RAIZ).parts
     meta = {
-        "ano": None,
-        "mes": None,
-        "local": None,
-        "local_normalizado": None,
-        "comissao": None,
-        "municipio": None,
-        "data": None,
-        "evento": None,
-        "tema": None,
-        "fotografo": None,
+        "ano":        None,
+        "mes":        None,
+        "categoria":  None,
+        "data":       None,
+        "tipo":       None,
+        "tipo_nome":  None,
+        "descricao":  None,
+        "comissao":   None,
+        "municipio":  None,
+        "fotografo":  None,
         "sequencial": None,
     }
 
-    # Nível 0: "Fotos 2026" → ano
-    if len(partes) > 0:
-        match = re.search(r"\d{4}", partes[0])
-        if match:
-            meta["ano"] = match.group()
+    # Nível 0: ano (AAAA)
+    if len(partes) > 0 and re.match(r"^\d{4}$", partes[0]):
+        meta["ano"] = partes[0]
 
-    # Nível 1: "03 - Março" → mês
-    if len(partes) > 1:
-        mes = re.sub(r"^\d+\s*-\s*", "", partes[1]).strip()
-        meta["mes"] = mes
+    # Nível 1: mês (MM)
+    if len(partes) > 1 and re.match(r"^\d{2}$", partes[1]):
+        meses = {
+            "01": "Janeiro", "02": "Fevereiro", "03": "Março",
+            "04": "Abril",   "05": "Maio",      "06": "Junho",
+            "07": "Julho",   "08": "Agosto",    "09": "Setembro",
+            "10": "Outubro", "11": "Novembro",  "12": "Dezembro"
+        }
+        meta["mes"] = meses.get(partes[1], partes[1])
 
-    # Nível 2: local
-    if len(partes) > 2:
-        local_raw = partes[2]
-        local_ascii = remover_acentos(local_raw)
-        meta["local"] = local_raw
-        meta["local_normalizado"] = LOCAIS_NORMALIZADOS.get(local_ascii, local_raw)
+    # Nível 2: categoria
+    if len(partes) > 2 and partes[2].upper() in CATEGORIAS:
+        meta["categoria"] = partes[2].upper()
 
-    # Nível 3: pasta do evento "DDMMAAAA_Evento_Fotografo"
+    # Nível 3: pasta do evento AAAA-MM-DD_TIPO_DESCRICAO[_MUNICIPIO]
     if len(partes) > 3:
-        nome_pasta = partes[3]
-        # aceita underscore ou espaço como separador
-        separador = "_" if "_" in nome_pasta else " "
-        segmentos = nome_pasta.split(separador)
+        blocos = partes[3].split("_")
 
-        # Data DDMMAAAA ou DDMMAA
-        if segmentos:
-            match_data = re.match(r"^(\d{6}|\d{8})$", segmentos[0])
-            if match_data:
-                d = segmentos[0]
-                try:
-                    if len(d) == 8:
-                        meta["data"] = f"{d[0:2]}/{d[2:4]}/{d[4:8]}"
-                    elif len(d) == 6:
-                        meta["data"] = f"{d[0:2]}/{d[2:4]}/20{d[4:6]}"
-                except Exception:
-                    pass
-                segmentos = segmentos[1:]
+        # Bloco 0: data AAAA-MM-DD
+        if blocos and re.match(r"^\d{4}-\d{2}-\d{2}$", blocos[0]):
+            try:
+                dt = datetime.strptime(blocos[0], "%Y-%m-%d")
+                meta["data"] = dt.strftime("%d/%m/%Y")
+                if not meta["ano"]:
+                    meta["ano"] = dt.strftime("%Y")
+                if not meta["mes"]:
+                    meta["mes"] = dt.strftime("%B")
+            except ValueError:
+                pass
+            blocos = blocos[1:]
 
-        # Fotógrafo no último segmento (estrutura atual)
-        if segmentos and re.match(r"^[A-Z]{2,3}$", segmentos[-1]):
-            codigo = segmentos[-1]
-            meta["fotografo"] = FOTOGRAFOS.get(codigo, codigo)
-            segmentos = segmentos[:-1]
+        # Bloco 1: tipo do evento
+        if blocos:
+            tipo_raw = blocos[0].upper()
 
-        # O que sobrou depende do tipo de local
-        local_ascii = remover_acentos(meta["local"] or "")
-        tipo_especifico = LOCAIS_COM_ESPECIFICIDADE.get(local_ascii)
-
-        if segmentos:
-            if tipo_especifico == "comissao":
-                # Tudo que sobrou é o nome da comissão
-                meta["comissao"] = remover_acentos(" ".join(segmentos)).title()
-            elif tipo_especifico == "municipio":
-                # Primeiro segmento é o município
-                meta["municipio"] = remover_acentos(segmentos[0]).title()
-                if len(segmentos) > 1:
-                    meta["evento"] = remover_acentos(segmentos[1]).title()
-                if len(segmentos) > 2:
-                    meta["tema"] = remover_acentos(" ".join(segmentos[2:])).title()
+            # Comissão tem subtipo: COMISSAO_CCJ → tipo=COMISSAO, comissao=CCJ
+            if tipo_raw == "COMISSAO" and len(blocos) > 1:
+                subtipo = blocos[1].upper()
+                meta["tipo"] = "COMISSAO"
+                meta["tipo_nome"] = TIPO_PARA_NOME.get("COMISSAO", "Comissão")
+                meta["comissao"] = COMISSOES.get(subtipo, subtipo.replace("-", " ").title())
+                meta["categoria"] = "COMISSOES-E-FRENTES"
+                blocos = blocos[2:]
             else:
-                # Plenário e demais — tudo é evento
-                meta["evento"] = remover_acentos(" ".join(segmentos)).title()
+                meta["tipo"] = tipo_raw
+                meta["tipo_nome"] = TIPO_PARA_NOME.get(tipo_raw, tipo_raw.replace("-", " ").title())
+                if not meta["categoria"]:
+                    meta["categoria"] = TIPO_PARA_CATEGORIA.get(tipo_raw)
+                blocos = blocos[1:]
 
-    # Nome do arquivo: extrai fotógrafo e sequencial se estrutura futura
-    nome_arquivo = caminho_foto.stem
-    seg_arquivo = nome_arquivo.split("_")
+        # Blocos restantes: descrição e município opcional
+        if blocos:
+            # Município é o último bloco se não contiver hífen interno
+            # e não for código de fotógrafo
+            ultimo = blocos[-1].upper()
+            if (not re.match(r"^[A-Z]{2,3}$", ultimo) and
+                not re.match(r"^[A-Z]{2,3}-\d+$", ultimo) and
+                len(blocos) > 1):
+                meta["municipio"] = blocos[-1].replace("-", " ").title()
+                blocos = blocos[:-1]
 
-    # Remove data do início
-    if seg_arquivo and re.match(r"^(\d{6}|\d{8})$", seg_arquivo[0]):
+            meta["descricao"] = " ".join(
+                b.replace("-", " ").title() for b in blocos
+            )
+
+    # Nome do arquivo: AAAA-MM-DD_TIPO_DESCRICAO[_MUNICIPIO]_COD-SEQ.jpg
+    nome_arquivo = caminho_foto.stem.upper()
+    seg_arquivo  = nome_arquivo.split("_")
+
+    # Remove data do início se existir
+    if seg_arquivo and re.match(r"^\d{4}-\d{2}-\d{2}$", seg_arquivo[0]):
         seg_arquivo = seg_arquivo[1:]
 
-    # Sequencial no final
-    seq_match = re.match(r"^(\d{2,}|[A-Z]+-\d+)$", seg_arquivo[-1]) if seg_arquivo else None
-    if seq_match:
-        meta["sequencial"] = seg_arquivo[-1]
-        seg_arquivo = seg_arquivo[:-1]
-
-    # Fotógrafo antes do sequencial
-    if seg_arquivo and re.match(r"^[A-Z]{2,3}$", seg_arquivo[-1]):
-        codigo = seg_arquivo[-1]
-        meta["fotografo"] = FOTOGRAFOS.get(codigo, codigo)
+    # Último segmento: COD-SEQ (ex: BC-001)
+    if seg_arquivo:
+        ultimo = seg_arquivo[-1]
+        match = re.match(r"^([A-Z]{2,3})-(\d+)$", ultimo)
+        if match:
+            codigo          = match.group(1)
+            meta["sequencial"] = match.group(2)
+            meta["fotografo"]  = FOTOGRAFOS.get(codigo, codigo)
+            seg_arquivo = seg_arquivo[:-1]
 
     return meta
 
@@ -296,8 +354,16 @@ class MonitorFotos(FileSystemEventHandler):
 
         # Extrai metadados da estrutura de pastas
         meta = extrair_metadados_caminho(caminho)
-        print(f"  📁 Local: {meta['local']} | Evento: {meta['evento']} | "
-              f"Data: {meta['data']} | Fotógrafo: {meta['fotografo']}")
+        evento_display = meta.get("comissao") or meta.get("tipo_nome") or "—"
+        print(f"  📁 Categoria: {meta['categoria']} | "
+            f"Tipo: {meta['tipo_nome']} | "
+            f"Evento: {evento_display} | "
+            f"Data: {meta['data']} | "
+            f"Fotógrafo: {meta['fotografo']}")
+        if meta.get("municipio"):
+            print(f"  📍 Município: {meta['municipio']}")
+        if meta.get("descricao"):
+            print(f"  📝 Descrição: {meta['descricao']}")
 
         # Reconhecimento facial
         print(f"  🔍 Reconhecendo deputados...")
