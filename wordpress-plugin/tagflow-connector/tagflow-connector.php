@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALESC Media Connector
  * Description: Preenche automaticamente campos de mídia a partir do nome do arquivo
- * Version: 1.2
+ * Version: 1.3
  * Author: Agência ALESC
  * Requires PHP: 7.2
  */
@@ -12,7 +12,6 @@ if (!defined('ABSPATH')) {
 }
 
 // ─── DADOS DE CONFIGURAÇÃO ────────────────────────────────────────────────────
-// Static cache — arrays criados uma única vez por requisição
 
 function alesc_fotografos() {
     static $cache = null;
@@ -87,8 +86,25 @@ function alesc_comissoes() {
     return $cache;
 }
 
+// ─── HELPERS MULTIBYTE ────────────────────────────────────────────────────────
+// Garante tratamento correto de acentos em português independente do servidor
+
+function alesc_strtolower($str) {
+    return mb_strtolower($str, 'UTF-8');
+}
+
+function alesc_ucwords($str) {
+    return mb_convert_case($str, MB_CASE_TITLE, 'UTF-8');
+}
+
+function alesc_formatar_texto($str) {
+    return alesc_ucwords(alesc_strtolower(str_replace('-', ' ', $str)));
+}
+
 // ─── PARSER DO NOME DO ARQUIVO ────────────────────────────────────────────────
 function alesc_parsear_filename($filename) {
+    // Converte para maiúsculas usando strtoupper — seguro porque o filename
+    // segue o manual ISO 8601 sem acentos (AAAA-MM-DD_TIPO_DESC_COD-SEQ)
     $nome   = strtoupper(pathinfo($filename, PATHINFO_FILENAME));
     $blocos = explode('_', $nome);
 
@@ -106,11 +122,12 @@ function alesc_parsear_filename($filename) {
         'filename_original' => $filename,
     );
 
+    // Meses com acentos corretos via array — não depende de funções locale
     $meses = array(
-        '01' => 'Janeiro',  '02' => 'Fevereiro', '03' => 'Março',
-        '04' => 'Abril',    '05' => 'Maio',       '06' => 'Junho',
-        '07' => 'Julho',    '08' => 'Agosto',     '09' => 'Setembro',
-        '10' => 'Outubro',  '11' => 'Novembro',   '12' => 'Dezembro',
+        '01' => 'Janeiro',   '02' => 'Fevereiro', '03' => 'Março',
+        '04' => 'Abril',     '05' => 'Maio',       '06' => 'Junho',
+        '07' => 'Julho',     '08' => 'Agosto',     '09' => 'Setembro',
+        '10' => 'Outubro',   '11' => 'Novembro',   '12' => 'Dezembro',
     );
 
     // Bloco 0 — data AAAA-MM-DD
@@ -145,11 +162,13 @@ function alesc_parsear_filename($filename) {
             $subtipo           = array_shift($blocos);
             $meta['tipo']      = 'COMISSAO';
             $meta['tipo_nome'] = 'Comissão';
+            // Nome da comissão já vem com acentos corretos do array
             $meta['comissao']  = isset($comissoes[$subtipo])
                                  ? $comissoes[$subtipo]
-                                 : ucwords(strtolower(str_replace('-', ' ', $subtipo)));
+                                 : alesc_ucwords(alesc_strtolower(str_replace('-', ' ', $subtipo)));
         } else {
             $meta['tipo']      = $tipo;
+            // Nome do tipo já vem com acentos corretos do array
             $meta['tipo_nome'] = isset($tipos[$tipo])
                                  ? $tipos[$tipo]
                                  : null;
@@ -157,20 +176,22 @@ function alesc_parsear_filename($filename) {
     }
 
     // Blocos restantes — município com prefixo MUN- e descrição
-    // Prefixo MUN- elimina ambiguidade com qualquer município de SC
+    // MUN- funciona para qualquer município de SC sem lista limitada
     // Exemplo: MUN-CHAPECO, MUN-SAO-JOSE, MUN-BALNEARIO-CAMBORIU
     $descricao_blocos = array();
     foreach ($blocos as $bloco) {
         if (strpos($bloco, 'MUN-') === 0) {
-            $municipio_raw     = substr($bloco, 4); // remove prefixo MUN-
-            $meta['municipio'] = ucwords(strtolower(str_replace('-', ' ', $municipio_raw)));
+            $municipio_raw     = substr($bloco, 4);
+            // Formata com multibyte: SAO-JOSE → São Jose
+            $meta['municipio'] = alesc_formatar_texto($municipio_raw);
         } else {
             $descricao_blocos[] = $bloco;
         }
     }
 
     if (!empty($descricao_blocos)) {
-        $meta['descricao'] = ucwords(strtolower(
+        // Formata descrição com multibyte
+        $meta['descricao'] = alesc_ucwords(alesc_strtolower(
             implode(' ', array_map(function($b) {
                 return str_replace('-', ' ', $b);
             }, $descricao_blocos))
@@ -240,7 +261,7 @@ function alesc_processar_upload($metadata, $attachment_id) {
     // ── Campos customizados ───────────────────────────────────────────────────
     // Adaptar os meta_keys abaixo conforme os campos do WordPress da ALESC
 
-    // Rastreabilidade — nome original do arquivo que gerou os metadados
+    // Rastreabilidade — salvo sempre, independente do padrão de nomenclatura
     update_post_meta(
         $attachment_id,
         'alesc_filename_original',
