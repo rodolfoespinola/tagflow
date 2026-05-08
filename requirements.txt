@@ -1,0 +1,4 @@
+deepface==0.0.93
+flask==3.0.0
+watchdog==4.0.0
+tf-keras

@@ -28,4 +28,4 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
-*.code-workspace
+*.code-workspacevenv-tagflow/
