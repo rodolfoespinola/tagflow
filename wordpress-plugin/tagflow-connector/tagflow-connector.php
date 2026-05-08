@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALESC Media Connector
  * Description: Preenche automaticamente campos de mídia a partir do nome do arquivo
- * Version: 1.4
+ * Version: 1.5
  * Author: Agência ALESC
  * Requires PHP: 7.2
  */
@@ -81,6 +81,57 @@ function alesc_comissoes() {
             'PESSOA-IDOSA'           => 'Comissão dos Direitos da Pessoa Idosa',
             'MISTA'                  => 'Comissão Mista',
             'CPI'                    => 'Comissão Parlamentar de Inquérito',
+        );
+    }
+    return $cache;
+}
+
+// Dicionário de municípios com acentuação correta
+// Cobre os mais frequentes em pautas da ALESC
+// Municípios fora da lista saem sem acento (Sao Jose → Sao Jose) — aceitável para MVP
+function alesc_municipios_dict() {
+    static $cache = null;
+    if ($cache === null) {
+        $cache = array(
+            'FLORIANOPOLIS'        => 'Florianópolis',
+            'CHAPECO'              => 'Chapecó',
+            'JOINVILLE'            => 'Joinville',
+            'BLUMENAU'             => 'Blumenau',
+            'ITAJAI'               => 'Itajaí',
+            'CRICIUMA'             => 'Criciúma',
+            'SAO-JOSE'             => 'São José',
+            'LAGES'                => 'Lages',
+            'JARAGUA-DO-SUL'       => 'Jaraguá do Sul',
+            'BALNEARIO-CAMBORIU'   => 'Balneário Camboriú',
+            'BRUSQUE'              => 'Brusque',
+            'TUBARAO'              => 'Tubarão',
+            'CONCORDIA'            => 'Concórdia',
+            'CACADOR'              => 'Caçador',
+            'MAFRA'                => 'Mafra',
+            'CANOINHAS'            => 'Canoinhas',
+            'SAO-BENTO-DO-SUL'     => 'São Bento do Sul',
+            'RIO-DO-SUL'           => 'Rio do Sul',
+            'BIGUACU'              => 'Biguaçu',
+            'PALHOCA'              => 'Palhoça',
+            'XANXERE'              => 'Xanxerê',
+            'CURITIBANOS'          => 'Curitibanos',
+            'ARARANGUA'            => 'Araranguá',
+            'IMBITUBA'             => 'Imbituba',
+            'LAGUNA'               => 'Laguna',
+            'ORLEANS'              => 'Orleans',
+            'URUSSANGA'            => 'Urussanga',
+            'ICARA'                => 'Içara',
+            'JOACABA'              => 'Joaçaba',
+            'VIDEIRA'              => 'Videira',
+            'CAMPOS-NOVOS'         => 'Campos Novos',
+            'HERVAL-DO-OESTE'      => 'Herval do Oeste',
+            'TANGARA'              => 'Tangará',
+            'SAO-MIGUEL-DO-OESTE'  => 'São Miguel do Oeste',
+            'MARAVILHA'            => 'Maravilha',
+            'PINHALZINHO'          => 'Pinhalzinho',
+            'PALMITOS'             => 'Palmitos',
+            'QUILOMBO'             => 'Quilombo',
+            'SAO-LOURENCO-DO-OESTE'=> 'São Lourenço do Oeste',
         );
     }
     return $cache;
@@ -175,13 +226,16 @@ function alesc_parsear_filename($filename) {
     }
 
     // Blocos restantes — município com prefixo MUN- e descrição
-    // Prefixo MUN- resolve ambiguidade para todos os 295 municípios de SC
-    // Exemplo: MUN-CHAPECO, MUN-SAO-JOSE, MUN-BALNEARIO-CAMBORIU
+    $municipios_dict  = alesc_municipios_dict();
     $descricao_blocos = array();
+
     foreach ($blocos as $bloco) {
         if (strpos($bloco, 'MUN-') === 0) {
-            $municipio_raw     = substr($bloco, 4);
-            $meta['municipio'] = alesc_formatar_texto($municipio_raw);
+            $municipio_raw = substr($bloco, 4);
+            // Verifica dicionário primeiro para acentuação correta
+            $meta['municipio'] = isset($municipios_dict[$municipio_raw])
+                                 ? $municipios_dict[$municipio_raw]
+                                 : alesc_formatar_texto($municipio_raw);
         } else {
             $descricao_blocos[] = $bloco;
         }
@@ -205,6 +259,13 @@ function alesc_processar_upload($metadata, $attachment_id) {
         return $metadata;
     }
 
+    // Trava anti-reprocessamento
+    // Evita sobrescrever campos editados manualmente e reprocessamento
+    // por plugins de regeneração de thumbnails (ex: Regenerate Thumbnails)
+    if (get_post_meta($attachment_id, '_alesc_processado', true)) {
+        return $metadata;
+    }
+
     $arquivo  = get_attached_file($attachment_id);
     $filename = basename($arquivo);
     $meta     = alesc_parsear_filename($filename);
@@ -225,13 +286,11 @@ function alesc_processar_upload($metadata, $attachment_id) {
         $meta['data'] ? '— ' . $meta['data'] : null,
     ));
     $titulo = implode(' ', $partes_titulo);
-    // wp_update_post() sanitiza post_title internamente — não sanitizar antes
 
     // ── Legenda ───────────────────────────────────────────────────────────────
     $legenda = !empty($meta['fotografo'])
                ? 'Foto: ' . $meta['fotografo']
                : '';
-    // wp_update_post() sanitiza post_excerpt internamente — não sanitizar antes
 
     // ── Alt text ──────────────────────────────────────────────────────────────
     $partes_alt = array_filter(array(
@@ -242,7 +301,7 @@ function alesc_processar_upload($metadata, $attachment_id) {
     ));
     $alt_text = sanitize_text_field(implode(' ', $partes_alt));
 
-    // ── Campos nativos do WordPress ───────────────────────────────────────────
+    // ── Campos nativos — wp_update_post sanitiza internamente ─────────────────
     if (!empty($alt_text)) {
         update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
     }
@@ -258,7 +317,6 @@ function alesc_processar_upload($metadata, $attachment_id) {
     }
 
     // ── Campos customizados ───────────────────────────────────────────────────
-    // Sanitize aplicado aqui — meta fields não passam por sanitização interna do WP
     // Adaptar os meta_keys conforme os campos do WordPress da ALESC
 
     // Rastreabilidade — salvo sempre, meta_key fixo
@@ -310,6 +368,9 @@ function alesc_processar_upload($metadata, $attachment_id) {
             sanitize_text_field($meta['ano'])
         );
     }
+
+    // Marca como processado — impede reprocessamento por regeneração de thumbnails
+    update_post_meta($attachment_id, '_alesc_processado', 1);
 
     error_log('ALESC Media Connector: concluído — attachment_id ' . $attachment_id);
 
