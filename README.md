@@ -142,8 +142,6 @@ Automatically extracted fields:
 | `EXPOARTE`    | Exposição de Arte                           |
 | `CULTURAL`    | Evento Cultural                             |
 
-> Note: folder categories (`SESSOES`, `COMISSOES-E-FRENTES` etc.) exist only in the server directory structure and are not extracted from filenames.
-
 ### Supported Commissions (COMISSAO subtype)
 
 | Code            | Full name                                       |
@@ -183,7 +181,7 @@ The plugin populates the following WordPress fields automatically on upload:
 | Deputies (persons) | Facial recognition + review    | Asynchronous |
 | Party              | Derived from deputy mapping    | Asynchronous |
 
-> WordPress custom fields pending confirmation from dev team. Lines marked `# adaptar` in `tagflow-connector.php` must be updated with actual `meta_key` values.
+> WordPress custom fields pending confirmation. Lines marked `# adaptar` in `tagflow-connector.php` must be updated with actual `meta_key` values.
 
 ---
 
